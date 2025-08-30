@@ -142,7 +142,6 @@ void HTView::move_id(WORKSPACEID ws_id, bool move_window) {
 
     monitor->changeWorkspace(other_workspace);
     if (move_window) {
-        // Maybe use warps or sth??
         g_pCompositor->focusWindow(hovered_window);
 
         // taken from Hyprland:
