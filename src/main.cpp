@@ -207,7 +207,13 @@ static SDispatchResult dispatch_nextlayerwindow(std::string arg) {
 static SDispatchResult dispatch_kill_hover(std::string arg) {
     if (ht_manager == nullptr)
         return {.success = false, .error = "ht_manager is null"};
-    const PHLWINDOW hovered_window = ht_manager->get_window_from_cursor();
+
+    const PHTVIEW cursor_view = ht_manager->get_view_from_cursor();
+    if (cursor_view == nullptr)
+        return {.success = false, .error = "cursor_view is null"};
+    // Only use actually hovered window when overview is active
+    // Use focused otherwise
+    const PHLWINDOW hovered_window = ht_manager->get_window_from_cursor(!cursor_view->active);
     if (hovered_window == nullptr)
         return {.success = false, .error = "hovered_window is null"};
     g_pCompositor->closeWindow(hovered_window);
@@ -257,11 +263,20 @@ static void on_mouse_button(void* thisptr, SCallbackInfo& info, std::any args) {
     const auto e = std::any_cast<IPointer::SButtonEvent>(args);
     const bool pressed = e.state == WL_POINTER_BUTTON_STATE_PRESSED;
 
-    if (pressed && e.button == BTN_LEFT) {
+    unsigned int BUTTON_DRAG = BTN_LEFT;
+    unsigned int BUTTON_EXIT = BTN_RIGHT;
+
+    const int swap_mouse = HTConfig::value<Hyprlang::INT>("swap_mouse_actions");
+    if (swap_mouse) {
+        BUTTON_DRAG = BTN_RIGHT;
+        BUTTON_EXIT = BTN_LEFT;
+    }
+
+    if (pressed && e.button == BUTTON_DRAG) {
         info.cancelled = ht_manager->start_window_drag();
-    } else if (!pressed && e.button == BTN_LEFT) {
+    } else if (!pressed && e.button == BUTTON_DRAG) {
         info.cancelled = ht_manager->end_window_drag();
-    } else if (pressed && e.button == BTN_RIGHT) {
+    } else if (pressed && e.button == BUTTON_EXIT) {
         info.cancelled = ht_manager->exit_to_workspace();
     }
 }
@@ -438,10 +453,12 @@ static void init_config() {
     HyprlandAPI::addConfigValue(PHANDLE, "plugin:hyprtasking:layout", Hyprlang::STRING {"grid"});
 
     // general
+    HyprlandAPI::addConfigValue(PHANDLE, "plugin:hyprtasking:swap_mouse_actions", Hyprlang::INT {0});
     HyprlandAPI::addConfigValue(PHANDLE, "plugin:hyprtasking:bg_color", Hyprlang::INT {0x000000FF});
     HyprlandAPI::addConfigValue(PHANDLE, "plugin:hyprtasking:gap_size", Hyprlang::FLOAT {8.f});
     HyprlandAPI::addConfigValue(PHANDLE, "plugin:hyprtasking:border_size", Hyprlang::FLOAT {4.f});
     HyprlandAPI::addConfigValue(PHANDLE, "plugin:hyprtasking:exit_on_hovered", Hyprlang::INT {0});
+    HyprlandAPI::addConfigValue(PHANDLE, "plugin:hyprtasking:warp_on_move_window", Hyprlang::INT {1});
 
     // swipe
     HyprlandAPI::addConfigValue(PHANDLE, "plugin:hyprtasking:gestures:enabled", Hyprlang::INT {1});

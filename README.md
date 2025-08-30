@@ -36,6 +36,9 @@ https://github.com/user-attachments/assets/8d6cdfd2-2b17-4240-a117-1dbd2231ed4e
 - [ ] Touch and gesture support
 - [x] Overview layers
 
+> [!NOTE]
+> If either `input:left_handed` or `plugin:hyprtasking:swap_mouse_action` is set to `true`, then right and left clicks are swapped
+
 ## Installation
 
 ### Hyprpm
@@ -134,7 +137,9 @@ plugin {
         gap_size = 20
         bg_color = 0xff26233a
         border_size = 4
+        swap_mouse_actions = false
         exit_on_hovered = false
+        warp_on_move_window = 1
 
         gestures {
             enabled = true
@@ -212,7 +217,9 @@ All options should are prefixed with `plugin:hyprtasking:`.
 | `bg_color` | `Hyprlang::INT` | The color of the background of the overlay | `0x000000FF` |
 | `gap_size` | `Hyprlang::FLOAT` | The width in logical pixels of the gaps between workspaces | `8.f` |
 | `border_size` | `Hyprlang::FLOAT` | The width in logical pixels of the borders around workspaces | `4.f` |
+| `swap_mouse_actions` | `Hyprlang::INT` | When enabled makes left click exit overview and right click drag windows | `false` |
 | `exit_on_hovered` | `Hyprlang::INT` | If true, hiding the workspace will exit to the hovered workspace instead of the active workspace. | `false` |
+| `warp_on_move_window` | `Hyprlang::INT` | Works the same as `cursor:warp_on_change_workspace` (see [wiki](https://wiki.hypr.land/Configuring/Variables/#cursor)) but with `hyprtasking:movewindow` dispathcer. <br> `cursor:warp_on_change_workspace` works only with `hyprtasking:move` dispathcer | `1` |
 | `gestures:enabled` | `Hyprlang::INT` | Whether or not to enable gestures | `true` |
 | `gestures:move_fingers` | `Hyprlang::INT` | The number of fingers to use for the "move" gesture | `3` |
 | `gestures:move_distance` | `Hyprlang::FLOAT` | How large of a swipe on the touchpad corresponds to the width of a workspace | `300.f` |
