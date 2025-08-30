@@ -35,7 +35,10 @@ https://github.com/user-attachments/assets/8d6cdfd2-2b17-4240-a117-1dbd2231ed4e
     - [x] Toggle keybind
 - [ ] Touch and gesture support
 - [ ] Overview layers
-    
+
+> [!NOTE]
+> If either `input:left_handed` or `plugin:hyprtasking:swap_mouse_action` is set to `true`, then right and left clicks are swapped
+
 ## Installation
 
 ### Hyprpm
@@ -93,7 +96,7 @@ Then use `hyprctl plugin load` to load the absolute path to the `.so` file.
 
 ### Opening Overview
 
-- Bind `hyprtasking:toggle, all` to a keybind to open/close the overlay on all monitors. 
+- Bind `hyprtasking:toggle, all` to a keybind to open/close the overlay on all monitors.
 - Bind `hyprtasking:toggle, cursor` to a keybind to open the overlay on one monitor and close on all monitors.
 - Swipe up/down on a touchpad device to open/close the overlay on one monitor.
 - See [below](#Configuration) for configuration options.
@@ -131,6 +134,7 @@ plugin {
         gap_size = 20
         bg_color = 0xff26233a
         border_size = 4
+        swap_mouse_actions = false
         exit_on_hovered = false
 
         gestures {
@@ -193,6 +197,7 @@ All options should are prefixed with `plugin:hyprtasking:`.
 | `bg_color` | `Hyprlang::INT` | The color of the background of the overlay | `0x000000FF` |
 | `gap_size` | `Hyprlang::FLOAT` | The width in logical pixels of the gaps between workspaces | `8.f` |
 | `border_size` | `Hyprlang::FLOAT` | The width in logical pixels of the borders around workspaces | `4.f` |
+| `swap_mouse_actions` | `Hyprlang::INT` | When enabled makes left click exit overview and right click drag windows | `false` |
 | `exit_on_hovered` | `Hyprlang::INT` | If true, hiding the workspace will exit to the hovered workspace instead of the active workspace. | `false` |
 | `gestures:enabled` | `Hyprlang::INT` | Whether or not to enable gestures | `true` |
 | `gestures:move_fingers` | `Hyprlang::INT` | The number of fingers to use for the "move" gesture | `3` |
@@ -203,7 +208,7 @@ All options should are prefixed with `plugin:hyprtasking:`.
 | `grid:rows` | `Hyprlang::INT` | The number of rows to display on the grid overlay | `3` |
 | `grid:cols` | `Hyprlang::INT` | The number of columns to display on the grid overlay | `3` |
 | `grid:loop` | `Hyprlang::INT` | When enabled, moving right at the far right of the grid will wrap around to the leftmost workspace, etc. | `false` |
-| `grid:gaps_use_aspect_ratio` | `Hyprlang::INT` | When enabled, vertical gaps will be scaled to match the monitor's aspect ratio | `false` | 
+| `grid:gaps_use_aspect_ratio` | `Hyprlang::INT` | When enabled, vertical gaps will be scaled to match the monitor's aspect ratio | `false` |
 | `linear:blur` | `Hyprlang::INT` | Whether or not to blur the dimmed area | `false` |
 | `linear:height` | `Hyprlang::FLOAT` | The height of the linear overlay in logical pixels | `300.f` |
 | `linear:scroll_speed` | `Hyprlang::FLOAT` | Scroll speed modifier. Set negative to flip direction | `1.f` |
