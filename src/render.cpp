@@ -35,7 +35,6 @@ void render_window_at_box(PHLWINDOW window, PHLMONITOR monitor, const Time::stea
 
     g_pHyprRenderer->damageWindow(window);
     ((render_window_t)render_window)(
-        g_pHyprRenderer.get(),
         window,
         monitor,
         time,
