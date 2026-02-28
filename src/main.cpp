@@ -1,6 +1,5 @@
 #include <linux/input-event-codes.h>
 
-#include <ctime>
 #include <hyprland/src/Compositor.hpp>
 #include <hyprland/src/SharedDefs.hpp>
 #include <hyprland/src/desktop/DesktopTypes.hpp>
@@ -19,7 +18,6 @@
 #include <hyprlang.hpp>
 #include <hyprutils/math/Box.hpp>
 #include <hyprutils/math/Vector2D.hpp>
-#include <print>
 
 #include "config.hpp"
 #include "globals.hpp"
@@ -91,17 +89,12 @@ static SDispatchResult dispatch_toggle_view(std::string arg) {
 }
 
 static SDispatchResult dispatch_move(std::string arg) {
-    std::print("dispatch move");
     if (ht_manager == nullptr)
         return {.success = false, .error = "ht_manager is null"};
-    std::print("ht_man is ok");
     const PHTVIEW cursor_view = ht_manager->get_view_from_cursor();
-    std::print("got view from cursor");
     if (cursor_view == nullptr)
         return {.success = false, .error = "cursor_view is null"};
-    std::print("view not null ptr, moving");
     cursor_view->move(arg, false);
-    std::print("moved, returning");
     return {};
 }
 
