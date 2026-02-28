@@ -314,10 +314,20 @@ static void init_functions() {
     Log::logger->log(LOG, "[Hyprtasking] Attempting hook {}", FNS2[0].signature);
     success = should_render_window_hook->hook() && success;
 
-    static auto FNS3 = HyprlandAPI::findFunctionsByName(PHANDLE, "renderWindow");
+    // Right now (in v0.54.0) there are several "renderWindow" functions
+    // This is needed so it won't break on update that adds/removes a
+    // function with this name
+    // This, however, requires checking for signautre changes
+    static auto FNS3 = HyprlandAPI::findFunctionsByName(
+        PHANDLE,
+        "_ZN13CHyprRenderer12renderWindowEN9Hyprutils6Memory14CSha"
+        "redPointerIN7Desktop4View7CWindowEEENS2_I8CMonitorEERKNSt"
+        "6chrono10time_pointINS9_3_V212steady_clockENS9_8durationI"
+        "lSt5ratioILl1ELl1000000000EEEEEEb15eRenderPassModebb"
+    );
     if (FNS3.empty())
         fail_exit("No renderWindow");
-    render_window = FNS3[1].address;
+    render_window = FNS3[0].address;
 
     static auto FNS4 = HyprlandAPI::findFunctionsByName(PHANDLE, "isSolitaryBlocked");
     if (FNS4.empty())
