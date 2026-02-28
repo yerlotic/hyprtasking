@@ -14,6 +14,7 @@ typedef void (*render_workspace_t)(
 
 typedef bool (*should_render_window_t)(void* thisptr, PHLWINDOW pWindow, PHLMONITOR pMonitor);
 typedef void (*render_window_t)(
+    // void* thisptr,
     PHLWINDOW pWindow,
     PHLMONITOR pMonitor,
     const Time::steady_tp& time,
