@@ -430,7 +430,7 @@ static void init_functions() {
     static auto FNS3 = HyprlandAPI::findFunctionsByName(PHANDLE, "renderWindow");
     if (FNS3.empty())
         fail_exit("No renderWindow");
-    render_window = FNS3[0].address;
+    render_window = FNS3[1].address;
 
     static auto FNS4 = HyprlandAPI::findFunctionsByName(PHANDLE, "isSolitaryBlocked");
     if (FNS4.empty())
