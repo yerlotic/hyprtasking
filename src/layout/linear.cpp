@@ -193,10 +193,7 @@ bool HTLayoutLinear::should_render_window(PHLWINDOW window) {
         return ori_result;
 
     const SP<Layout::ITarget> target = g_layoutManager->dragController()->target();
-    if (target == nullptr)
-        return false;
-    const PHLWINDOW dragged_window = target->window();
-    if (window == dragged_window)
+    if (target != nullptr && window == target->window())
         return false;
 
     if (rendering_standard_ws)

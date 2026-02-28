@@ -1,6 +1,5 @@
 #include "grid.hpp"
 
-#include <ctime>
 #include <hyprland/src/Compositor.hpp>
 #include <hyprland/src/config/ConfigManager.hpp>
 #include <hyprland/src/config/ConfigValue.hpp>
@@ -186,6 +185,7 @@ bool HTLayoutGrid::should_render_window(PHLWINDOW window) {
     const PHLMONITOR monitor = get_monitor();
     if (window == nullptr || monitor == nullptr)
         return ori_result;
+
     const SP<Layout::ITarget> target = g_layoutManager->dragController()->target();
     if (target != nullptr && window == target->window())
         return false;
