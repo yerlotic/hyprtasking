@@ -165,6 +165,7 @@ plugin {
         }
 
         linear {
+            top = false
             height = 400
             scroll_speed = 1.0
             blur = false
@@ -239,6 +240,7 @@ All options should are prefixed with `plugin:hyprtasking:`.
 | `grid:layers` | `Hyprlang::INT` | The number of layers for grid layout, the third dimension | `1` |
 | `grid:loop_layers` | `Hyprlang::INT` | When enabled, moving back on the first layer will wrap around to the last layer. The reverse also works | `true` |
 | `grid:gaps_use_aspect_ratio` | `Hyprlang::INT` | When enabled, vertical gaps will be scaled to match the monitor's aspect ratio | `false` |
+| `linear:top` | `Hyprlang::INT` | Whether or not to position the overview on top of the screen | `false` |
 | `linear:blur` | `Hyprlang::INT` | Whether or not to blur the dimmed area | `false` |
 | `linear:height` | `Hyprlang::FLOAT` | The height of the linear overlay in logical pixels | `300.f` |
 | `linear:scroll_speed` | `Hyprlang::FLOAT` | Scroll speed modifier. Set negative to flip direction | `1.f` |
