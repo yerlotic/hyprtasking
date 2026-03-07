@@ -140,7 +140,8 @@ void HTLayoutGrid::on_show(CallbackFun on_complete) {
     const PHLMONITOR monitor = get_monitor();
     if (monitor == nullptr)
         return;
-
+    
+    init_position();
     *scale = calculate_ws_box(0, 0, HT_VIEW_OPENED).w / monitor->m_transformedSize.x; // 1 / ROWS
     *offset = {0, 0};
 }
