@@ -83,6 +83,7 @@ void HTView::show() {
     closing = false;
     navigating = false;
 
+    layout->init_position();
     layout->on_show();
 
     Cursor::overrideController->setOverride("left_ptr", Cursor::CURSOR_OVERRIDE_UNKNOWN);
