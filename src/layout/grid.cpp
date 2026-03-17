@@ -285,9 +285,21 @@ void HTLayoutGrid::build_overview_layout(HTViewStage stage) {
 
     overview_layout.clear();
 
+    // ROWS*COLS workspaces
+    //           per layer
+    //           per monitor
+    //       M1
+    //  L1       L2
+    // 1  2     5  6
+    // 3  4     7  8
+    //       M2
+    //  L1       L2
+    // 9  10    13 14
+    // 11 12    15 16
+    const int ws_per_view = ROWS*COLS;
     for (int y = 0; y < ROWS; y++) {
         for (int x = 0; x < COLS; x++) {
-            const WORKSPACEID ws_id = first_ws_offset + (view_id * ROWS + y) * COLS + x + 1;
+            const WORKSPACEID ws_id = view_id * ws_per_view + first_ws_offset + (view_id * ROWS + y) * COLS + x + 1;
             const PHLWORKSPACE workspace = g_pCompositor->getWorkspaceByID(ws_id);
             if (workspace != nullptr && workspace->monitorID() != view_id) {
                 g_pCompositor->moveWorkspaceToMonitor(workspace, monitor);
