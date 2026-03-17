@@ -108,9 +108,15 @@ static SDispatchResult dispatch_move_window(std::string arg) {
     return {};
 }
 
-static void set_offset(int new_offset) {
-    PHTVIEW view = ht_manager->get_view_from_cursor();
+static void set_offset(PHTVIEW view, int new_offset) {
     if (view == nullptr)
+        return;
+
+    // HACK: Prevent no focus when closing the view
+    // Makes layers less responsive and less buggy
+    // Ideally we would wait for it to close and then update
+    // Or update the destination as the offset is changing
+    if (view->closing)
         return;
     Log::logger->log(
         LOG,
@@ -125,20 +131,21 @@ static void set_offset(int new_offset) {
 static SDispatchResult dispatch_setoffset(std::string arg) {
     if (ht_manager == nullptr)
         return {.success = false, .error = "ht_manager is null"};
-    const int original_offset = ht_manager->get_view_from_cursor()->layout->first_ws_offset;
-    PHTVIEW view = ht_manager->get_view_from_cursor();
-
-    if (arg[0] == '+' || arg[0] == '-') {
-        view->layout->first_ws_offset += std::stoi(arg);
-    } else {
-        view->layout->first_ws_offset = std::stoi(arg);
-    }
-    set_offset(view->layout->first_ws_offset);
-
-
     const PHTVIEW cursor_view = ht_manager->get_view_from_cursor();
     if (cursor_view == nullptr)
         return {.success = false, .error = "cursor_view is null"};
+
+    const int original_offset = cursor_view->layout->first_ws_offset;
+    int new_offset = original_offset;
+
+    if (arg[0] == '+' || arg[0] == '-') {
+        new_offset += std::stoi(arg);
+    } else {
+        new_offset = std::stoi(arg);
+    }
+    set_offset(cursor_view, new_offset);
+
+
     const PHLMONITOR monitor = cursor_view->get_monitor();
     if (monitor == nullptr)
         return {.success = false, .error = "monitor is null"};
@@ -147,9 +154,17 @@ static SDispatchResult dispatch_setoffset(std::string arg) {
         return {.success = false, .error = "active_workspace is null"};
     const WORKSPACEID source_ws_id = active_workspace->m_id;
 
-    const int offset_delta = original_offset - view->layout->first_ws_offset;
+    const int offset_delta = new_offset - original_offset;
 
-    cursor_view->move_id(source_ws_id - offset_delta, false);
+    Log::logger->log(
+        LOG,
+        "[Hyprtasking] Setting offset from workspace \"{}\", from offset: {}",
+        active_workspace->m_id,
+        original_offset
+
+    );
+
+    cursor_view->move_id(source_ws_id + offset_delta, false);
     return {};
 }
 
@@ -170,10 +185,12 @@ static SDispatchResult change_layer(std::string arg, bool move_window) {
     const int LOOP_LAYERS = HTConfig::value<Hyprlang::INT>("grid:loop_layers");
     const int MAX_OFFSET = (LAYERS-1)*COLS*ROWS;
 
-    int resulting_offset;
+    const int original_offset = cursor_view->layout->first_ws_offset;
+
+    int resulting_offset = original_offset;
     if (arg[0] == '+' || arg[0] == '-') {
         // relative jump
-        resulting_offset = cursor_view->layout->first_ws_offset + ROWS*COLS*std::stoi(arg);
+        resulting_offset += ROWS*COLS*std::stoi(arg);
     } else {
         // absolute jump
         resulting_offset = ROWS*COLS*std::stoi(arg);
@@ -187,27 +204,26 @@ static SDispatchResult change_layer(std::string arg, bool move_window) {
         return {.success = false, .error = "active_workspace is null"};
     const WORKSPACEID source_ws_id = active_workspace->m_id;
 
-    WORKSPACEID target_ws_id = source_ws_id - (cursor_view->layout->first_ws_offset - resulting_offset);
+    const int offset_delta = resulting_offset - original_offset;
+    WORKSPACEID target_ws_id = source_ws_id + offset_delta;
 
     // if resulting offset doesn't fit in boundaries
     if (resulting_offset > MAX_OFFSET || resulting_offset < 0) {
-        if (LOOP_LAYERS) {
-            target_ws_id = source_ws_id - cursor_view->layout->first_ws_offset;
-            if (resulting_offset < 0) {
-                target_ws_id += MAX_OFFSET;
-                resulting_offset = MAX_OFFSET;
-            } else if (resulting_offset > MAX_OFFSET) {
-                resulting_offset = 0;
-            }
-        } else {
-            // Don't do anything if next is invalid and grid:loop_layers is disabled
-            target_ws_id = source_ws_id;
-            resulting_offset = cursor_view->layout->first_ws_offset;
+        // Don't do anything if next is invalid and grid:loop_layers is disabled
+        if (!LOOP_LAYERS) {
+            return {};
+        }
+
+        target_ws_id = source_ws_id - original_offset;
+        if (resulting_offset < 0) {
+            target_ws_id += MAX_OFFSET;
+            resulting_offset = MAX_OFFSET;
+        } else if (resulting_offset > MAX_OFFSET) {
+            resulting_offset = 0;
         }
     }
 
-    cursor_view->layout->first_ws_offset = resulting_offset;
-    set_offset(resulting_offset);
+    set_offset(cursor_view, resulting_offset);
 
     cursor_view->move_id(target_ws_id, move_window);
     return {};
