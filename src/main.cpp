@@ -116,6 +116,17 @@ static void set_offset(PHTVIEW view, int new_offset) {
     // Makes layers less responsive and less buggy
     // Ideally we would wait for it to close and then update
     // Or update the destination as the offset is changing
+    // If you wanna fix this, then test it
+    // on a multimonitor setup with this command:
+    //   hyprctl dispatch --batch 'dispatch hyprtasking:setlayer -1;
+    //   dispatch hyprtasking:move left;
+    //   dispatch hyprtasking:toggle cursor;
+    //   dispatch hyprtasking:setlayer -1;
+    //   dispatch hyprtasking:toggle cursor;
+    //   dispatch hyprtasking:toggle cursor;
+    //   dispatch hyprtasking:move down;
+    //   dispatch hyprtasking:setlayer +1;
+    //   dispatch hyprtasking:toggle cursor'
     if (view->closing)
         return;
     Log::logger->log(
@@ -145,7 +156,6 @@ static SDispatchResult dispatch_setoffset(std::string arg) {
     }
     set_offset(cursor_view, new_offset);
 
-
     const PHLMONITOR monitor = cursor_view->get_monitor();
     if (monitor == nullptr)
         return {.success = false, .error = "monitor is null"};
@@ -161,7 +171,6 @@ static SDispatchResult dispatch_setoffset(std::string arg) {
         "[Hyprtasking] Setting offset from workspace \"{}\", from offset: {}",
         active_workspace->m_id,
         original_offset
-
     );
 
     cursor_view->move_id(source_ws_id + offset_delta, false);
