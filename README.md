@@ -128,8 +128,11 @@ bind = SUPER, J, hyprtasking:move, down
 bind = SUPER, K, hyprtasking:move, up
 bind = SUPER, L, hyprtasking:move, right
 
-bind = SUPER, A, hyprtasking:setlayer, +1
-bind = SUPER SHIFT, A, hyprtasking:setlayerwindow, +1
+bind = SUPER, A, hyprtasking:move, out
+bind = SUPER SHIFT, A, hyprtasking:movewindow, out
+
+bind = SUPER CTRL, 1, hyprtasking:setlayer, 1
+bind = SUPER CTRL, 2, hyprtasking:setlayer, 2
 
 plugin {
     hyprtasking {
@@ -189,10 +192,10 @@ plugin {
         - if current monitor's overview is hidden, then it will be shown
         - otherwise all overviews will be hidden
 
-- `hyprtasking:move, ARG` takes in 1 argument that is one of `up`, `down`, `left`, `right`
+- `hyprtasking:move, ARG` takes in 1 argument that is one of `up`, `down`, `left`, `right`, `in`, `out`
     - when dispatched, hyprtasking will switch workspaces with a nice animation
 
-- `hyprtasking:movewindow, ARG` takes in 1 argument that is one of `up`, `down`, `left`, `right`
+- `hyprtasking:movewindow, ARG` takes in 1 argument that is one of `up`, `down`, `left`, `right`, `in`, `out`
     - when dispatched, hyprtasking will 1. move the hovered window to the workspace in the given direction relative to the window, and 2. switch to that workspace.
 
 - `hyprtasking:setlayer, ARG` takes in 1 optional argument that specifies the direction of movement across layers.

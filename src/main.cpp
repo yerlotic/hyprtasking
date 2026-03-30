@@ -88,12 +88,20 @@ static SDispatchResult dispatch_toggle_view(std::string arg) {
     return {};
 }
 
+// Forward declaration
+static SDispatchResult change_layer(std::string arg, bool move_window);
+
 static SDispatchResult dispatch_move(std::string arg) {
     if (ht_manager == nullptr)
         return {.success = false, .error = "ht_manager is null"};
     const PHTVIEW cursor_view = ht_manager->get_view_from_cursor();
     if (cursor_view == nullptr)
         return {.success = false, .error = "cursor_view is null"};
+    if (arg == "in") {
+        return change_layer("-1", false);
+    } if (arg == "out") {
+        return change_layer("+1", false);
+    }
     cursor_view->move(arg, false);
     return {};
 }
@@ -105,6 +113,11 @@ static SDispatchResult dispatch_move_window(std::string arg) {
     if (cursor_view == nullptr)
         return {.success = false, .error = "cursor_view is null"};
     cursor_view->move(arg, true);
+    if (arg == "in") {
+        return change_layer("-1", true);
+    } if (arg == "out") {
+        return change_layer("+1", true);
+    }
     return {};
 }
 
@@ -186,7 +199,7 @@ static SDispatchResult change_layer(std::string arg, bool move_window) {
         return {.success = false, .error = "cursor_view is null"};
 
     if (cursor_view->layout->layout_name() != "grid")
-        return {.success = false, .error = "only grid layout is supported"};
+        return {.success = false, .error = "layers are only supported in grid layout"};
 
     const int ROWS = HTConfig::value<Hyprlang::INT>("grid:rows");
     const int COLS = HTConfig::value<Hyprlang::INT>("grid:cols");
