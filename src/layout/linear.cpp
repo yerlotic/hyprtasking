@@ -242,14 +242,18 @@ CBox HTLayoutLinear::calculate_ws_box(int x, int y, HTViewStage stage) {
     if (monitor == nullptr)
         return {};
 
+    // Monitor may not have its final size yet during connect/reconnect
+    if (monitor->m_transformedSize.x < 1 || monitor->m_transformedSize.y < 1)
+        return {};
+
     const float HEIGHT = HTConfig::value<Hyprlang::FLOAT>("linear:height") * monitor->m_scale;
     const float GAP_SIZE = HTConfig::value<Hyprlang::FLOAT>("gap_size") * monitor->m_scale;
 
     if (HEIGHT < 0 || HEIGHT > monitor->m_transformedSize.y)
-        fail_exit("Linear layout height {} is taller than monitor size", HEIGHT);
+        return {};
 
     if (GAP_SIZE < 0 || GAP_SIZE > HEIGHT / 2.f)
-        fail_exit("Invalid gap_size {} for linear layout", GAP_SIZE);
+        return {};
 
     float use_view_offset = view_offset->value();
     if (stage == HT_VIEW_CLOSED)

@@ -253,6 +253,10 @@ static void register_monitors() {
     if (ht_manager == nullptr)
         return;
     for (const PHLMONITOR& monitor : g_pCompositor->m_monitors) {
+        // Skip monitors that haven't finished initializing
+        if (monitor->m_transformedSize.x < 1 || monitor->m_transformedSize.y < 1)
+            continue;
+
         const PHTVIEW view = ht_manager->get_view_from_monitor(monitor);
         if (view != nullptr) {
             if (!view->active)

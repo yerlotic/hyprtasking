@@ -215,14 +215,26 @@ void HTLayoutGrid::init_position() {
     if (monitor == nullptr)
         return;
 
+    if (monitor->m_activeWorkspace == nullptr)
+        return;
+
     build_overview_layout(HT_VIEW_CLOSED);
-    offset->setValueAndWarp(-overview_layout[monitor->m_activeWorkspace->m_id].box.pos());
+
+    const auto it = overview_layout.find(monitor->m_activeWorkspace->m_id);
+    if (it == overview_layout.end() || it->second.box.empty())
+        return;
+
+    offset->setValueAndWarp(-it->second.box.pos());
     scale->setValueAndWarp(1.f);
 }
 
 CBox HTLayoutGrid::calculate_ws_box(int x, int y, HTViewStage stage) {
     const PHLMONITOR monitor = get_monitor();
     if (monitor == nullptr)
+        return {};
+
+    // Monitor may not have its final size yet during connect/reconnect
+    if (monitor->m_transformedSize.x < 1 || monitor->m_transformedSize.y < 1)
         return {};
 
     const int ROWS = HTConfig::value<Hyprlang::INT>("grid:rows");
@@ -238,7 +250,7 @@ CBox HTLayoutGrid::calculate_ws_box(int x, int y, HTViewStage stage) {
 
     if (GAP_SIZE > std::min(monitor->m_transformedSize.x, monitor->m_transformedSize.y)
         || GAP_SIZE < 0)
-        fail_exit("Gap size {} induces invalid render dimensions", GAP_SIZE);
+        return {};
 
     double render_x = (monitor->m_transformedSize.x - gaps.x * (COLS + 1)) / COLS;
     double render_y = (monitor->m_transformedSize.y - gaps.y * (ROWS + 1)) / ROWS;
