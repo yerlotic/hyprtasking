@@ -121,7 +121,7 @@ static SDispatchResult dispatch_move_window(std::string arg) {
     return {};
 }
 
-static void set_offset(PHTVIEW view, int new_offset) {
+static void set_layer(PHTVIEW view, int new_layer) {
     if (view == nullptr)
         return;
 
@@ -144,50 +144,12 @@ static void set_offset(PHTVIEW view, int new_offset) {
         return;
     Log::logger->log(
         LOG,
-        "[Hyprtasking] View \"{}\", previous offset: {}, new: {}",
+        "[Hyprtasking] View \"{}\", previous layer: {}, new: {}",
         view->get_monitor()->m_name,
-        view->layout->first_ws_offset,
-        new_offset
+        view->layout->layer,
+        new_layer
     );
-    view->layout->first_ws_offset = new_offset;
-}
-
-static SDispatchResult dispatch_setoffset(std::string arg) {
-    if (ht_manager == nullptr)
-        return {.success = false, .error = "ht_manager is null"};
-    const PHTVIEW cursor_view = ht_manager->get_view_from_cursor();
-    if (cursor_view == nullptr)
-        return {.success = false, .error = "cursor_view is null"};
-
-    const int original_offset = cursor_view->layout->first_ws_offset;
-    int new_offset = original_offset;
-
-    if (arg[0] == '+' || arg[0] == '-') {
-        new_offset += std::stoi(arg);
-    } else {
-        new_offset = std::stoi(arg);
-    }
-    set_offset(cursor_view, new_offset);
-
-    const PHLMONITOR monitor = cursor_view->get_monitor();
-    if (monitor == nullptr)
-        return {.success = false, .error = "monitor is null"};
-    const PHLWORKSPACE active_workspace = monitor->m_activeWorkspace;
-    if (active_workspace == nullptr)
-        return {.success = false, .error = "active_workspace is null"};
-    const WORKSPACEID source_ws_id = active_workspace->m_id;
-
-    const int offset_delta = new_offset - original_offset;
-
-    Log::logger->log(
-        LOG,
-        "[Hyprtasking] Setting offset from workspace \"{}\", from offset: {}",
-        active_workspace->m_id,
-        original_offset
-    );
-
-    cursor_view->move_id(source_ws_id + offset_delta, false);
-    return {};
+    view->layout->layer = new_layer;
 }
 
 static SDispatchResult change_layer(std::string arg, bool move_window) {
@@ -205,17 +167,16 @@ static SDispatchResult change_layer(std::string arg, bool move_window) {
     const int COLS = HTConfig::value<Hyprlang::INT>("grid:cols");
     const int LAYERS = HTConfig::value<Hyprlang::INT>("grid:layers");
     const int LOOP_LAYERS = HTConfig::value<Hyprlang::INT>("grid:loop_layers");
-    const int MAX_OFFSET = (LAYERS-1)*COLS*ROWS;
+    const int ws_per_layer = ROWS*COLS;
+    const int original_layer = cursor_view->layout->layer;
 
-    const int original_offset = cursor_view->layout->first_ws_offset;
-
-    int resulting_offset = original_offset;
+    int resulting_layer = original_layer;
     if (arg[0] == '+' || arg[0] == '-') {
         // relative jump
-        resulting_offset += ROWS*COLS*std::stoi(arg);
+        resulting_layer += std::stoi(arg);
     } else {
         // absolute jump
-        resulting_offset = ROWS*COLS*std::stoi(arg);
+        resulting_layer = std::stoi(arg);
     }
 
     const PHLMONITOR monitor = cursor_view->get_monitor();
@@ -226,26 +187,27 @@ static SDispatchResult change_layer(std::string arg, bool move_window) {
         return {.success = false, .error = "active_workspace is null"};
     const WORKSPACEID source_ws_id = active_workspace->m_id;
 
-    const int offset_delta = resulting_offset - original_offset;
-    WORKSPACEID target_ws_id = source_ws_id + offset_delta;
+    const int layer_delta = resulting_layer - original_layer;
+    WORKSPACEID target_ws_id = source_ws_id + layer_delta * ws_per_layer;
 
     // if resulting offset doesn't fit in boundaries
-    if (resulting_offset > MAX_OFFSET || resulting_offset < 0) {
+    if (resulting_layer >= LAYERS || resulting_layer < 0) {
         // Don't do anything if next is invalid and grid:loop_layers is disabled
         if (!LOOP_LAYERS) {
             return {};
         }
 
-        target_ws_id = source_ws_id - original_offset;
-        if (resulting_offset < 0) {
-            target_ws_id += MAX_OFFSET;
-            resulting_offset = MAX_OFFSET;
-        } else if (resulting_offset > MAX_OFFSET) {
-            resulting_offset = 0;
+        if (resulting_layer < 0) {
+            resulting_layer = LAYERS - 1;
+        } else if (resulting_layer >= LAYERS) {
+            resulting_layer = 0;
         }
+        target_ws_id = cursor_view->monitor_id * ws_per_layer * LAYERS + // Monitor
+                       ws_per_layer * resulting_layer +                  // Layer
+                       (source_ws_id - 1) % ws_per_layer + 1;            // X and Y of a workspace
     }
 
-    set_offset(cursor_view, resulting_offset);
+    set_layer(cursor_view, resulting_layer);
 
     cursor_view->move_id(target_ws_id, move_window);
     return {};
@@ -524,7 +486,6 @@ static void add_dispatchers() {
     HyprlandAPI::addDispatcherV2(PHANDLE, "hyprtasking:move", dispatch_move);
     HyprlandAPI::addDispatcherV2(PHANDLE, "hyprtasking:movewindow", dispatch_move_window);
     HyprlandAPI::addDispatcherV2(PHANDLE, "hyprtasking:killhovered", dispatch_kill_hover);
-    HyprlandAPI::addDispatcherV2(PHANDLE, "hyprtasking:setoffset", dispatch_setoffset);
     HyprlandAPI::addDispatcherV2(PHANDLE, "hyprtasking:setlayer", dispatch_setlayer);
     HyprlandAPI::addDispatcherV2(PHANDLE, "hyprtasking:setlayerwindow", dispatch_setlayerwindow);
 }

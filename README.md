@@ -207,11 +207,6 @@ plugin {
 - `hyprtasking:setlayerwindow, ARG` takes in 1 optional argument that specifies the direction of movement across layers.
     - when dispatched, hyprtasking will do the same as `hyprtasking:setlayer, ARG` and also move the window through layers
 
-- `hyprtasking:setoffset, ARG` takes in 1 argument that specifies the direction of movement across layers.
-    - the argument can be a relative change: `+3`, `-4` or an absolute value to set the offset: `15`
-    - when dispatched, hyprtasking will change the first workspace rendered to be the workspace with id=`offset + 1`
-    - initially the offset is 0
-
 - `hyprtasking:killhovered` behaves similarly to the standard `killactive` dispatcher with focus on hover
     - when dispatched, hyprtasking will the currently hovered window, useful when the overview is active.
     - this dispatcher is designed to **replace** killactive, it will work even when the overview is **not active**.
