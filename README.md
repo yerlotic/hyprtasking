@@ -197,6 +197,14 @@ plugin {
 
 - `hyprtasking:movewindow, ARG` takes in 1 argument that is one of `up`, `down`, `left`, `right`, `in`, `out`
     - when dispatched, hyprtasking will 1. move the hovered window to the workspace in the given direction relative to the window, and 2. switch to that workspace.
+<details><summary>
+<b>Click here to see the coordinate space</b>
+</summary>
+
+<div align="center">
+<img src="https://github.com/user-attachments/assets/2c5ddf85-2a0a-412d-8ade-c2606fa920d3" width=70% height=70% alt="Coordinates">
+</div>
+</details>
 
 - `hyprtasking:setlayer, ARG` takes in 1 optional argument that specifies the direction of movement across layers.
     - if provided, the argument has to start with `+` or `-` to take effect. For example: `+1`, `-3`
