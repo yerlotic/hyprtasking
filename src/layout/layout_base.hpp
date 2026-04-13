@@ -27,6 +27,7 @@ class HTLayoutBase {
 
     virtual std::string layout_name() = 0;
 
+    int layer = 0;
     struct HTWorkspace {
         int x;
         int y;

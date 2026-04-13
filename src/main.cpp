@@ -88,12 +88,20 @@ static SDispatchResult dispatch_toggle_view(std::string arg) {
     return {};
 }
 
+// Forward declaration
+static SDispatchResult change_layer(std::string arg, bool move_window);
+
 static SDispatchResult dispatch_move(std::string arg) {
     if (ht_manager == nullptr)
         return {.success = false, .error = "ht_manager is null"};
     const PHTVIEW cursor_view = ht_manager->get_view_from_cursor();
     if (cursor_view == nullptr)
         return {.success = false, .error = "cursor_view is null"};
+    if (arg == "in") {
+        return change_layer("-1", false);
+    } if (arg == "out") {
+        return change_layer("+1", false);
+    }
     cursor_view->move(arg, false);
     return {};
 }
@@ -105,7 +113,112 @@ static SDispatchResult dispatch_move_window(std::string arg) {
     if (cursor_view == nullptr)
         return {.success = false, .error = "cursor_view is null"};
     cursor_view->move(arg, true);
+    if (arg == "in") {
+        return change_layer("-1", true);
+    } if (arg == "out") {
+        return change_layer("+1", true);
+    }
     return {};
+}
+
+static void set_layer(PHTVIEW view, int new_layer) {
+    if (view == nullptr)
+        return;
+
+    // HACK: Prevent no focus when closing the view
+    // Makes layers less responsive and less buggy
+    // Ideally we would wait for it to close and then update
+    // Or update the destination as the offset is changing
+    // If you wanna fix this, then test it
+    // on a multimonitor setup with this command:
+    //   hyprctl dispatch --batch 'dispatch hyprtasking:setlayer -1;
+    //   dispatch hyprtasking:move left;
+    //   dispatch hyprtasking:toggle cursor;
+    //   dispatch hyprtasking:setlayer -1;
+    //   dispatch hyprtasking:toggle cursor;
+    //   dispatch hyprtasking:toggle cursor;
+    //   dispatch hyprtasking:move down;
+    //   dispatch hyprtasking:setlayer +1;
+    //   dispatch hyprtasking:toggle cursor'
+    if (view->closing)
+        return;
+    Log::logger->log(
+        LOG,
+        "[Hyprtasking] View \"{}\", previous layer: {}, new: {}",
+        view->get_monitor()->m_name,
+        view->layout->layer,
+        new_layer
+    );
+    view->layout->layer = new_layer;
+}
+
+static SDispatchResult change_layer(std::string arg, bool move_window) {
+    if (ht_manager == nullptr)
+        return {.success = false, .error = "ht_manager is null"};
+
+    const PHTVIEW cursor_view = ht_manager->get_view_from_cursor();
+    if (cursor_view == nullptr)
+        return {.success = false, .error = "cursor_view is null"};
+
+    if (cursor_view->layout->layout_name() != "grid")
+        return {.success = false, .error = "layers are only supported in grid layout"};
+
+    const int ROWS = HTConfig::value<Hyprlang::INT>("grid:rows");
+    const int COLS = HTConfig::value<Hyprlang::INT>("grid:cols");
+    const int LAYERS = HTConfig::value<Hyprlang::INT>("grid:layers");
+    const int LOOP_LAYERS = HTConfig::value<Hyprlang::INT>("grid:loop_layers");
+    const int ws_per_layer = ROWS*COLS;
+    const int original_layer = cursor_view->layout->layer;
+
+    int resulting_layer = original_layer;
+    if (arg[0] == '+' || arg[0] == '-') {
+        // relative jump
+        resulting_layer += std::stoi(arg);
+    } else {
+        // absolute jump
+        resulting_layer = std::stoi(arg);
+    }
+
+    const PHLMONITOR monitor = cursor_view->get_monitor();
+    if (monitor == nullptr)
+        return {.success = false, .error = "monitor is null"};
+    const PHLWORKSPACE active_workspace = monitor->m_activeWorkspace;
+    if (active_workspace == nullptr)
+        return {.success = false, .error = "active_workspace is null"};
+    const WORKSPACEID source_ws_id = active_workspace->m_id;
+
+    const int layer_delta = resulting_layer - original_layer;
+    WORKSPACEID target_ws_id = source_ws_id + layer_delta * ws_per_layer;
+
+    // if resulting offset doesn't fit in boundaries
+    if (resulting_layer >= LAYERS || resulting_layer < 0) {
+        // Don't do anything if next is invalid and grid:loop_layers is disabled
+        if (!LOOP_LAYERS) {
+            return {};
+        }
+
+        if (resulting_layer < 0) {
+            resulting_layer = LAYERS - 1;
+        } else if (resulting_layer >= LAYERS) {
+            resulting_layer = 0;
+        }
+        target_ws_id = cursor_view->monitor_id * ws_per_layer * LAYERS + // Monitor
+                       ws_per_layer * resulting_layer +                  // Layer
+                       (source_ws_id - 1) % ws_per_layer + 1;            // X and Y of a workspace
+    }
+
+    set_layer(cursor_view, resulting_layer);
+
+    cursor_view->move_id(target_ws_id, move_window);
+    return {};
+}
+
+static SDispatchResult dispatch_setlayer(std::string arg) {
+    return change_layer(arg, false);
+}
+
+static SDispatchResult dispatch_setlayerwindow(std::string arg) {
+    return change_layer(arg, true);
 }
 
 static SDispatchResult dispatch_kill_hover(std::string arg) {
@@ -373,6 +486,8 @@ static void add_dispatchers() {
     HyprlandAPI::addDispatcherV2(PHANDLE, "hyprtasking:move", dispatch_move);
     HyprlandAPI::addDispatcherV2(PHANDLE, "hyprtasking:movewindow", dispatch_move_window);
     HyprlandAPI::addDispatcherV2(PHANDLE, "hyprtasking:killhovered", dispatch_kill_hover);
+    HyprlandAPI::addDispatcherV2(PHANDLE, "hyprtasking:setlayer", dispatch_setlayer);
+    HyprlandAPI::addDispatcherV2(PHANDLE, "hyprtasking:setlayerwindow", dispatch_setlayerwindow);
 }
 
 static void init_config() {
@@ -436,6 +551,8 @@ static void init_config() {
     // grid specific
     HyprlandAPI::addConfigValue(PHANDLE, "plugin:hyprtasking:grid:rows", Hyprlang::INT {3});
     HyprlandAPI::addConfigValue(PHANDLE, "plugin:hyprtasking:grid:cols", Hyprlang::INT {3});
+    HyprlandAPI::addConfigValue(PHANDLE, "plugin:hyprtasking:grid:layers", Hyprlang::INT {1});
+    HyprlandAPI::addConfigValue(PHANDLE, "plugin:hyprtasking:grid:loop_layers", Hyprlang::INT {1});
     HyprlandAPI::addConfigValue(PHANDLE, "plugin:hyprtasking:grid:loop", Hyprlang::INT {0});
     HyprlandAPI::addConfigValue(
         PHANDLE,
