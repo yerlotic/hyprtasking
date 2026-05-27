@@ -161,6 +161,9 @@ hl.config({
         open_fingers = 4,
         open_distance = 300,
         open_positive = true,
+        layout_fingers = 4,
+        layout_distance = 300,
+        layout_positive = true,
       },
 
       grid = {
@@ -230,6 +233,9 @@ plugin {
             open_fingers = 4
             open_distance = 300
             open_positive = true
+            layout_fingers = 4
+            layout_distance = 300
+            layout_positive = true
         }
 
         grid {
@@ -316,10 +322,13 @@ All options should are prefixed with `plugin:hyprtasking:`.
 | `gestures:open_fingers` | `int` | The number of fingers to use for the "open" gesture | `4` |
 | `gestures:open_distance` | `float` | How large of a swipe on the touchpad is needed for the "open" gesture | `300.f` |
 | `gestures:open_positive` | `int` | `true` if swiping up should open the overlay, `false` otherwise | `true` |
+| `gestures:layout_fingers` | `int` | The number of fingers to use for the horizontal layer-swipe gesture in grid layout | `4` |
+| `gestures:layout_distance` | `float` | How large of a swipe on the touchpad corresponds to one full layer-width during the horizontal layer-swipe gesture | `300.f` |
+| `gestures:layout_positive` | `int` | Controls the positive direction for the horizontal layer-swipe gesture, similar to `gestures:open_positive` | `true` |
 | `grid:rows` | `int` | The number of rows to display on the grid overlay | `3` |
 | `grid:cols` | `int` | The number of columns to display on the grid overlay | `3` |
 | `grid:loop` | `int` | When enabled, moving right at the far right of the grid will wrap around to the leftmost workspace, etc. | `false` |
-| `grid:layers` | `int` | The number of layers for grid layout, the third dimension | `1` |
+| `grid:layers` | `int` | The minimum number of layers for grid layout. Additional layers are created dynamically when workspaces exceed the configured grid volume | `1` |
 | `grid:loop_layers` | `int` | When enabled, moving back on the first layer will wrap around to the last layer. The reverse also works | `true` |
 | `grid:gaps_use_aspect_ratio` | `int` | When enabled, vertical gaps will be scaled to match the monitor's aspect ratio | `false` |
 | `linear:top` | `int` | Whether or not to position the overview on top of the screen | `false` |
