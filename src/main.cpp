@@ -125,9 +125,10 @@ static SDispatchResult change_layer(std::string arg, bool move_window) {
     if (cursor_view->layout->layout_name() != "grid")
         return {.success = false, .error = "layers are only supported in grid layout"};
 
-    const int LAYERS = HTConfig::value<Config::INTEGER>("grid:layers");
     const int LOOP_LAYERS = HTConfig::value<Config::INTEGER>("grid:loop_layers");
     const int original_layer = cursor_view->layout->layer;
+    auto* grid = static_cast<HTLayoutGrid*>(cursor_view->layout.get());
+    const int LAYERS = grid->effective_layers();
 
     int resulting_layer = original_layer;
     if (arg[0] == '+' || arg[0] == '-') {
@@ -150,7 +151,6 @@ static SDispatchResult change_layer(std::string arg, bool move_window) {
         return {.success = false, .error = "active_workspace is null"};
     const WORKSPACEID source_ws_id = active_workspace->m_id;
 
-    auto* grid = static_cast<HTLayoutGrid*>(cursor_view->layout.get());
     const auto src_it = grid->cache().find(source_ws_id);
     if (src_it == grid->cache().end())
         return {.success = false, .error = "active workspace not in grid cache"};
@@ -545,6 +545,9 @@ static void init_config() {
     addConfigValue(CIntValue, "gestures:open_fingers", "open fingers", 4);
     addConfigValue(CFloatValue, "gestures:open_distance", "open distance", 300.0);
     addConfigValue(CIntValue, "gestures:open_positive", "open positive", 1);
+    addConfigValue(CIntValue, "gestures:layout_fingers", "layout fingers", 4);
+    addConfigValue(CFloatValue, "gestures:layout_distance", "layout distance", 300.0);
+    addConfigValue(CIntValue, "gestures:layout_positive", "layout positive", 1);
 
     // grid specific
     addConfigValue(CIntValue, "grid:rows", "rows", 3);

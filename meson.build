@@ -31,13 +31,28 @@ dependencies = [
   dependency('libudev'),
   dependency('wayland-server'),
   dependency('xkbcommon'),
+  dependency('lua5.5'),
 ]
 
 if get_option('local_include')
   incdir += include_directories('include')
   incdir += include_directories('include/hyprland/protocols')
 else
-  dependencies += dependency('hyprland')
+  hyprland_dep = dependency('hyprland')
+  dependencies += hyprland_dep
+
+  hyprland_cflags = run_command(
+    'pkg-config',
+    '--cflags-only-I',
+    'hyprland',
+    check: true
+  ).stdout().strip().split()
+
+  foreach flag : hyprland_cflags
+    if flag.startswith('-I')
+      incdir += include_directories(flag.substring(2))
+    endif
+  endforeach
 endif
 
 shared_module(meson.project_name(), src,

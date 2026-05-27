@@ -48,6 +48,8 @@ class HTLayoutBase {
     virtual void on_move_swipe(Vector2D delta);
     // Returns the workspace id that the swipe should snap to
     virtual WORKSPACEID on_move_swipe_end();
+    virtual void on_swipe_layer(Vector2D delta);
+    virtual WORKSPACEID on_swipe_layer_end();
 
     // Get the workspace up/down left/right relative to the workspace at (x, y)
     virtual WORKSPACEID get_ws_id_in_direction(int x, int y, std::string& direction);

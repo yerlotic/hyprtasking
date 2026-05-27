@@ -17,12 +17,16 @@ class HTLayoutGrid: public HTLayoutBase {
   private:
     PHLANIMVAR<float> scale;
     PHLANIMVAR<Vector2D> offset;
+    bool layer_swipe_preview = false;
+    int layer_swipe_from = 0;
 
     // Survives workspace destruction so a slot stays sticky for an empty ws.
     std::unordered_map<WORKSPACEID, HTGridSlot> ws_slot_cache;
     std::unordered_map<long long, WORKSPACEID> slot_ws_cache;
 
     static long long pack_slot(int layer, int x, int y);
+    CBox calculate_ws_box_for_layer(int target_layer, int x, int y, HTViewStage stage);
+    int configured_layers() const;
 
   public:
     HTLayoutGrid(VIEWID view_id);
@@ -38,6 +42,8 @@ class HTLayoutGrid: public HTLayoutBase {
     virtual void on_move(WORKSPACEID old_id, WORKSPACEID new_id, CallbackFun on_complete);
     virtual void on_move_swipe(Vector2D delta);
     virtual WORKSPACEID on_move_swipe_end();
+    virtual void on_swipe_layer(Vector2D delta);
+    virtual WORKSPACEID on_swipe_layer_end();
 
     virtual WORKSPACEID get_ws_id_in_direction(int x, int y, std::string& direction);
 
@@ -49,6 +55,7 @@ class HTLayoutGrid: public HTLayoutBase {
 
     void refresh_workspace_cache(const std::unordered_set<WORKSPACEID>& extra_off_limits = {});
     WORKSPACEID slot_workspace(int layer, int x, int y);
+    int effective_layers() const;
 
     const std::unordered_map<WORKSPACEID, HTGridSlot>& cache() const { return ws_slot_cache; }
 };

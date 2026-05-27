@@ -35,6 +35,7 @@ class HTManager {
     enum swipe_state_t {
         HT_SWIPE_OPEN,
         HT_SWIPE_MOVE,
+        HT_SWIPE_LAYER,
         HT_SWIPE_NONE,
     };
 

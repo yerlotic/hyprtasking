@@ -8,6 +8,7 @@
 #include <hyprland/src/managers/input/InputManager.hpp>
 
 #include "config.hpp"
+#include "layout/grid.hpp"
 #include "manager.hpp"
 #include "overview.hpp"
 
@@ -224,6 +225,8 @@ bool HTManager::swipe_update(IPointer::SSwipeUpdateEvent e) {
     const float OPEN_DISTANCE = HTConfig::value<Config::FLOAT>("gestures:open_distance");
     const unsigned int OPEN_FINGERS = HTConfig::value<Config::INTEGER>("gestures:open_fingers");
     const int OPEN_POSITIVE = HTConfig::value<Config::INTEGER>("gestures:open_positive");
+    const unsigned int LAYOUT_FINGERS = HTConfig::value<Config::INTEGER>("gestures:layout_fingers");
+    const int LAYOUT_POSITIVE = HTConfig::value<Config::INTEGER>("gestures:layout_positive");
 
     bool res = false;
     char swipe_direction = 0;
@@ -231,6 +234,25 @@ bool HTManager::swipe_update(IPointer::SSwipeUpdateEvent e) {
         swipe_direction = 'h';
     } else if (std::abs(e.delta.y) > std::abs(e.delta.x)) {
         swipe_direction = 'v';
+    }
+
+    if (e.fingers == LAYOUT_FINGERS) {
+        const bool can_layer_swipe = cursor_view->active && !cursor_view->closing
+            && cursor_view->layout->layout_name() == "grid"
+            && static_cast<HTLayoutGrid*>(cursor_view->layout.get())->effective_layers() > 1;
+
+        if (can_layer_swipe
+            && (swipe_state == HT_SWIPE_LAYER
+                || (swipe_direction == 'h' && swipe_state == HT_SWIPE_NONE))) {
+            if (swipe_state != HT_SWIPE_LAYER)
+                swipe_state = HT_SWIPE_LAYER;
+            Vector2D layerDelta = e.delta;
+            layerDelta.x = LAYOUT_POSITIVE ? e.delta.x : -e.delta.x;
+            cursor_view->layout->on_swipe_layer(layerDelta);
+            g_pHyprRenderer->damageMonitor(cursor_monitor);
+            g_pCompositor->scheduleFrameForMonitor(cursor_monitor);
+            return true;
+        }
     }
 
     if (e.fingers == OPEN_FINGERS) {
@@ -302,6 +324,12 @@ bool HTManager::swipe_end() {
         case HT_SWIPE_MOVE: {
             const WORKSPACEID ws_id = cursor_view->layout->on_move_swipe_end();
             cursor_view->move_id(ws_id, false);
+            break;
+        }
+        case HT_SWIPE_LAYER: {
+            const WORKSPACEID ws_id = cursor_view->layout->on_swipe_layer_end();
+            if (ws_id != WORKSPACE_INVALID)
+                cursor_view->move_id(ws_id, false);
             break;
         }
         case HT_SWIPE_NONE:

@@ -55,6 +55,17 @@ long long HTLayoutGrid::pack_slot(int layer, int x, int y) {
     return ((long long)layer << 40) | ((long long)(uint32_t)y << 20) | (long long)(uint32_t)x;
 }
 
+int HTLayoutGrid::configured_layers() const {
+    return std::max<int>(1, HTConfig::value<Config::INTEGER>("grid:layers"));
+}
+
+int HTLayoutGrid::effective_layers() const {
+    int max_layer = configured_layers() - 1;
+    for (const auto& [ws_id, slot] : ws_slot_cache)
+        max_layer = std::max(max_layer, slot.layer);
+    return max_layer + 1;
+}
+
 WORKSPACEID HTLayoutGrid::slot_workspace(int layer, int x, int y) {
     const auto it = slot_ws_cache.find(pack_slot(layer, x, y));
     if (it == slot_ws_cache.end())
@@ -71,8 +82,8 @@ void HTLayoutGrid::refresh_workspace_cache(
 
     const int ROWS = HTConfig::value<Config::INTEGER>("grid:rows");
     const int COLS = HTConfig::value<Config::INTEGER>("grid:cols");
-    const int LAYERS = HTConfig::value<Config::INTEGER>("grid:layers");
-    if (ROWS <= 0 || COLS <= 0 || LAYERS <= 0)
+    const int CONFIGURED_LAYERS = configured_layers();
+    if (ROWS <= 0 || COLS <= 0 || CONFIGURED_LAYERS <= 0)
         return;
 
     const auto prior = ws_slot_cache;
@@ -80,9 +91,38 @@ void HTLayoutGrid::refresh_workspace_cache(
     ws_slot_cache.clear();
     slot_ws_cache.clear();
 
+    WORKSPACEID highest_id = 0;
+    for (const auto& [id, slot] : prior)
+        highest_id = std::max(highest_id, id);
+
+    // No two grids may map the same WORKSPACEID, else dragging into a slot
+    // could silently switch monitors. extra_off_limits carries IDs already
+    // claimed by sibling views in this refresh.
+    std::unordered_set<WORKSPACEID> off_limits = extra_off_limits;
+    const auto& ws_manager = Config::workspaceRuleMgr();
+    const auto& all_rules = ws_manager->getAllWorkspaceRules();
+    for (const auto& rule : all_rules) {
+        if (rule.m_workspaceId > 0) {
+            off_limits.insert(rule.m_workspaceId);
+            highest_id = std::max(highest_id, (WORKSPACEID)rule.m_workspaceId);
+        }
+    }
+    for (const auto& w : g_pCompositor->getWorkspacesCopy()) {
+        if (w == nullptr)
+            continue;
+        highest_id = std::max(highest_id, w->m_id);
+        if (w->monitorID() != view_id)
+            off_limits.insert(w->m_id);
+    }
+
+    const int DYNAMIC_LAYERS = std::max(
+        CONFIGURED_LAYERS,
+        (int)(((std::max<WORKSPACEID>(highest_id, 1) - 1) / (ROWS * COLS)) + 1)
+    );
+
     std::vector<HTGridSlot> slots;
-    slots.reserve((size_t)LAYERS * ROWS * COLS);
-    for (int l = 0; l < LAYERS; l++)
+    slots.reserve((size_t)DYNAMIC_LAYERS * ROWS * COLS);
+    for (int l = 0; l < DYNAMIC_LAYERS; l++)
         for (int y = 0; y < ROWS; y++)
             for (int x = 0; x < COLS; x++)
                 slots.push_back(HTGridSlot {l, x, y});
@@ -103,6 +143,21 @@ void HTLayoutGrid::refresh_workspace_cache(
         return -1;
     };
 
+    auto canonical_slot_index = [&](WORKSPACEID id) -> long long {
+        if (id <= 0)
+            return -1;
+
+        const long long slot_number = id - 1;
+        const long long layer = slot_number / (ROWS * COLS);
+        if (layer < 0 || layer >= DYNAMIC_LAYERS)
+            return -1;
+
+        const long long in_layer = slot_number % (ROWS * COLS);
+        const int x = (int)(in_layer % COLS);
+        const int y = (int)(in_layer / COLS);
+        return find_slot_index(HTGridSlot {(int)layer, x, y});
+    };
+
     auto next_free_slot = [&](size_t& cursor) -> long long {
         while (cursor < slots.size() && taken[cursor])
             cursor++;
@@ -114,6 +169,11 @@ void HTLayoutGrid::refresh_workspace_cache(
     auto place_with_prior = [&](WORKSPACEID id, size_t& cursor) -> bool {
         if (ws_slot_cache.count(id))
             return false;
+        const long long canonical = canonical_slot_index(id);
+        if (canonical >= 0 && !taken[(size_t)canonical]) {
+            place(id, (size_t)canonical);
+            return true;
+        }
         const auto pit = prior.find(id);
         if (pit != prior.end()) {
             const long long idx = find_slot_index(pit->second);
@@ -128,23 +188,6 @@ void HTLayoutGrid::refresh_workspace_cache(
         place(id, (size_t)idx);
         return true;
     };
-
-    // No two grids may map the same WORKSPACEID, else dragging into a slot
-    // could silently switch monitors. extra_off_limits carries IDs already
-    // claimed by sibling views in this refresh.
-    std::unordered_set<WORKSPACEID> off_limits = extra_off_limits;
-    const auto& ws_manager = Config::workspaceRuleMgr();
-    const auto& all_rules = ws_manager->getAllWorkspaceRules();
-    for (const auto& rule : all_rules) {
-        if (rule.m_workspaceId > 0)
-            off_limits.insert(rule.m_workspaceId);
-    }
-    for (const auto& w : g_pCompositor->getWorkspacesCopy()) {
-        if (w == nullptr)
-            continue;
-        if (w->monitorID() != view_id)
-            off_limits.insert(w->m_id);
-    }
 
     size_t cursor = 0;
 
@@ -292,6 +335,104 @@ WORKSPACEID HTLayoutGrid::on_move_swipe_end() {
     return closest;
 }
 
+void HTLayoutGrid::on_swipe_layer(Vector2D delta) {
+    const PHLMONITOR monitor = get_monitor();
+    if (monitor == nullptr)
+        return;
+
+    if (!layer_swipe_preview) {
+        layer_swipe_preview = true;
+        layer_swipe_from = layer;
+    }
+
+    const float LAYOUT_DISTANCE = HTConfig::value<Config::FLOAT>("gestures:layout_distance");
+    const double max_offset = monitor->m_transformedSize.x;
+
+    Vector2D new_offset = offset->value();
+    new_offset.x += delta.x / LAYOUT_DISTANCE * monitor->m_transformedSize.x;
+    new_offset.x = std::clamp<double>(new_offset.x, -max_offset, max_offset);
+
+    offset->resetAllCallbacks();
+    offset->setValueAndWarp(new_offset);
+}
+
+WORKSPACEID HTLayoutGrid::on_swipe_layer_end() {
+    const PHLMONITOR monitor = get_monitor();
+    if (monitor == nullptr)
+        return WORKSPACE_INVALID;
+
+    const int LAYERS = effective_layers();
+    const int LOOP = HTConfig::value<Config::INTEGER>("grid:loop_layers");
+    const double page_width = monitor->m_transformedSize.x;
+
+    const float offset_x = offset->value().x;
+    const float threshold = monitor->m_transformedSize.x * 0.12f;
+
+    int direction = 0;
+    if (offset_x > threshold)
+        direction = -1;
+    else if (offset_x < -threshold)
+        direction = +1;
+
+    if (direction == 0) {
+        offset->setCallbackOnEnd([this](auto) {
+            offset->setCallbackOnEnd(nullptr);
+            layer_swipe_preview = false;
+            offset->setValueAndWarp(Vector2D {0, 0});
+        });
+        *offset = Vector2D {0, 0};
+        return WORKSPACE_INVALID;
+    }
+
+    int target_layer = layer + direction;
+
+    if (target_layer < 0 || target_layer >= LAYERS) {
+        if (LOOP)
+            target_layer = ((target_layer % LAYERS) + LAYERS) % LAYERS;
+        else {
+            offset->setCallbackOnEnd([this](auto) {
+                offset->setCallbackOnEnd(nullptr);
+                layer_swipe_preview = false;
+                offset->setValueAndWarp(Vector2D {0, 0});
+            });
+            *offset = Vector2D {0, 0};
+            return WORKSPACE_INVALID;
+        }
+    }
+
+    WORKSPACEID target_ws = WORKSPACE_INVALID;
+
+    const PHLWORKSPACE active = monitor->m_activeWorkspace;
+    if (active) {
+        const auto it = ws_slot_cache.find(active->m_id);
+        if (it != ws_slot_cache.end())
+            target_ws = slot_workspace(target_layer, it->second.x, it->second.y);
+    }
+
+    if (target_ws == WORKSPACE_INVALID)
+        target_ws = slot_workspace(target_layer, 0, 0);
+
+    if (target_ws == WORKSPACE_INVALID) {
+        offset->setCallbackOnEnd([this](auto) {
+            offset->setCallbackOnEnd(nullptr);
+            layer_swipe_preview = false;
+            offset->setValueAndWarp(Vector2D {0, 0});
+        });
+        *offset = Vector2D {0, 0};
+        return WORKSPACE_INVALID;
+    }
+
+    const double current_offset = offset->value().x;
+    const double target_visual_offset =
+        current_offset + (direction > 0 ? page_width : -page_width);
+
+    layer = target_layer;
+    layer_swipe_preview = false;
+    offset->setValueAndWarp(Vector2D {target_visual_offset, 0.0});
+    *offset = Vector2D {0.0, 0.0};
+    return target_ws;
+}
+
 void HTLayoutGrid::close_open_lerp(float perc) {
     const PHLMONITOR monitor = get_monitor();
     if (monitor == nullptr)
@@ -422,6 +563,10 @@ void HTLayoutGrid::init_position() {
 }
 
 CBox HTLayoutGrid::calculate_ws_box(int x, int y, HTViewStage stage) {
+    return calculate_ws_box_for_layer(layer, x, y, stage);
+}
+
+CBox HTLayoutGrid::calculate_ws_box_for_layer(int target_layer, int x, int y, HTViewStage stage) {
     const PHLMONITOR monitor = get_monitor();
     if (monitor == nullptr)
         return {};
@@ -471,7 +616,7 @@ CBox HTLayoutGrid::calculate_ws_box(int x, int y, HTViewStage stage) {
 
     const Vector2D ws_sz = monitor->m_transformedSize * use_scale;
     return CBox {Vector2D {x, y} * (ws_sz + gaps) + gaps + use_offset + start_offset, ws_sz};
-};
+}
 
 void HTLayoutGrid::build_overview_layout(HTViewStage stage) {
     const PHLMONITOR monitor = get_monitor();
@@ -480,19 +625,60 @@ void HTLayoutGrid::build_overview_layout(HTViewStage stage) {
 
     const int ROWS = HTConfig::value<Config::INTEGER>("grid:rows");
     const int COLS = HTConfig::value<Config::INTEGER>("grid:cols");
+    const int LAYERS = effective_layers();
+    const int LOOP = HTConfig::value<Config::INTEGER>("grid:loop_layers");
 
     const PHLMONITOR last_monitor = Desktop::focusState()->monitor();
     Desktop::focusState()->rawMonitorFocus(monitor);
 
     overview_layout.clear();
-    for (int y = 0; y < ROWS; y++) {
-        for (int x = 0; x < COLS; x++) {
-            const WORKSPACEID ws_id = slot_workspace(layer, x, y);
-            if (ws_id == WORKSPACE_INVALID)
-                continue;
-            CBox ws_box = calculate_ws_box(x, y, stage);
-            ws_box.round();
-            overview_layout[ws_id] = HTWorkspace {x, y, ws_box};
+
+    auto build_layer = [&](int target_layer, int layer_shift) {
+        if (target_layer < 0 || target_layer >= LAYERS)
+            return;
+
+        for (int y = 0; y < ROWS; y++) {
+            for (int x = 0; x < COLS; x++) {
+                const WORKSPACEID ws_id = slot_workspace(target_layer, x, y);
+                if (ws_id == WORKSPACE_INVALID)
+                    continue;
+                CBox ws_box = calculate_ws_box_for_layer(target_layer, x, y, stage);
+                ws_box.translate(Vector2D {monitor->m_transformedSize.x * (double)layer_shift, 0.0});
+                ws_box.round();
+                overview_layout[ws_id] = HTWorkspace {x, y, ws_box};
+            }
+        }
+    };
+
+    build_layer(layer, 0);
+
+    if (layer_swipe_preview) {
+        const double swipe_offset = offset->value().x;
+
+        if (LOOP && LAYERS > 2) {
+            if (swipe_offset < 0) {
+                for (int step = 1; step < LAYERS; step++)
+                    build_layer((layer_swipe_from + step) % LAYERS, step);
+            } else if (swipe_offset > 0) {
+                for (int step = 1; step < LAYERS; step++)
+                    build_layer((layer_swipe_from - step + LAYERS) % LAYERS, -step);
+            } else {
+                build_layer((layer_swipe_from - 1 + LAYERS) % LAYERS, -1);
+                build_layer((layer_swipe_from + 1) % LAYERS, 1);
+            }
+        } else {
+            int prev_layer = layer_swipe_from - 1;
+            int next_layer = layer_swipe_from + 1;
+
+            if (LOOP && LAYERS > 0) {
+                prev_layer = (prev_layer + LAYERS) % LAYERS;
+                next_layer = next_layer % LAYERS;
+            }
+
+            if (prev_layer != layer_swipe_from)
+                build_layer(prev_layer, -1);
+            if (next_layer != layer_swipe_from)
+                build_layer(next_layer, 1);
         }
     }
 
