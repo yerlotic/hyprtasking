@@ -581,6 +581,18 @@ static void init_config() {
     addConfigValue(CIntValue, "grid:loop", "loop", 0);
     addConfigValue(CIntValue, "grid:gaps_use_aspect_ratio", "gaps use aspect ratio", 0);
 
+    // labels
+    addConfigValue(CBoolValue, "labels:display_label", "display workspace label", 1);
+    addConfigValue(CStringValue, "labels:position", "label position", "top_left");
+    addConfigValue(CStringValue, "labels:font", "label font", "");
+    addConfigValue(CIntValue, "labels:font_size", "label font size", 14);
+    addConfigValue(CIntValue, "labels:text_opacity", "label text opacity", 100);
+    addConfigValue(CStringValue, "labels:text_color", "label text color", "");
+    addConfigValue(CBoolValue, "labels:background", "label background", 0);
+    addConfigValue(CStringValue, "labels:background_color", "label background color", "");
+    addConfigValue(CIntValue, "labels:background_opacity", "label background opacity", 100);
+    addConfigValue(CBoolValue, "labels:mutagen", "label uses workspace name when available", 1);
+
     //linear specific
     addConfigValue(CIntValue, "linear:blur", "blur", 1);
     addConfigValue(CFloatValue, "linear:height", "height", 300.f);

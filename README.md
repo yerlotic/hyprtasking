@@ -152,6 +152,19 @@ hl.config({
       close_overview_on_reload = false,
       full_render = true, -- might lag
 
+      labels = {
+        display_label = true,
+        position = "top_left",
+        font = "",
+        font_size = 14,
+        text_opacity = 100,
+        text_color = "",
+        background = false,
+        background_color = "",
+        background_opacity = 100,
+        mutagen = true,
+      },
+
       -- for other mouse buttons see <linux/input-event-codes.h>
       drag_button = 0x110,   -- left mouse button
       select_button = 0x111, -- right mouse button
@@ -221,6 +234,19 @@ plugin {
         warp_on_move_window = 1
         close_overview_on_reload = false
         full_render = true  # might lag
+
+        labels {
+            display_label = true
+            position = top_left
+            font = ""
+            font_size = 14
+            text_opacity = 100
+            text_color = ""
+            background = false
+            background_color = ""
+            background_opacity = 100
+            mutagen = true
+        }
 
         drag_button = 0x110 # left mouse button
         select_button = 0x111 # right mouse button
@@ -313,6 +339,16 @@ All options should are prefixed with `plugin:hyprtasking:`.
 | `close_overview_on_reload ` | `int` | Whether to close the overview if its type didn't type didn't change after hyprland config reload | `true` |
 | `drag_button` | `int` | The mouse button to use to drag windows around | `0x110` |
 | `select_button` | `int` | The mouse button to use to select a workspace | `0x111` |
+| `labels:display_label` | `bool` | Whether or not to draw workspace labels | `true` |
+| `labels:position` | `string` | Label anchor inside each workspace tile. Valid values: `top_left`, `top`, `top_right`, `mid_left`, `mid`, `mid_right`, `bottom_left`, `bottom`, `bottom_right` | `top_left` |
+| `labels:font` | `string` | Font family passed to Hyprland's text renderer | `""` |
+| `labels:font_size` | `int` | Label font size in points | `14` |
+| `labels:text_opacity` | `int` | Label text opacity from `0` to `100` | `100` |
+| `labels:text_color` | `string` | Hex color for the label text | `""` |
+| `labels:background` | `bool` | Whether to draw a rounded background behind the label | `false` |
+| `labels:background_color` | `string` | Hex color for the label background | `""` |
+| `labels:background_opacity` | `int` | Background opacity from `0` to `100` | `100` |
+| `labels:mutagen` | `bool` | When enabled, use the workspace name when available instead of the numeric id | `true` |
 | `gestures:enabled` | `int` | Whether or not to enable gestures | `true` |
 | `gestures:move_fingers` | `int` | The number of fingers to use for the "move" gesture | `3` |
 | `gestures:move_distance` | `float` | How large of a swipe on the touchpad corresponds to the width of a workspace | `300.f` |

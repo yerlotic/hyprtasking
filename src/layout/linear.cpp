@@ -453,6 +453,8 @@ void HTLayoutLinear::render() {
                 render_box
             );
         }
+
+        render_workspace_label(ws_id, workspace, ws_layout.box);
     }
 
     monitor->m_activeWorkspace = start_workspace;

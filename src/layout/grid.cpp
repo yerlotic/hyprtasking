@@ -685,6 +685,8 @@ void HTLayoutGrid::render() {
         bdata.grad1 = border_col;
         bdata.borderSize = BORDERSIZE;
         g_pHyprRenderer->m_renderPass.add(makeUnique<CBorderPassElement>(bdata));
+
+        render_workspace_label(ws_id, g_pCompositor->getWorkspaceByID(ws_id), ws_layout.box);
     }
     g_pHyprRenderer->damageMonitor(monitor);
 
