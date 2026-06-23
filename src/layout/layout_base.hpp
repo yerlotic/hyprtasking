@@ -6,6 +6,7 @@
 #include <hyprland/src/render/Framebuffer.hpp>
 #include <hyprutils/math/Box.hpp>
 #include <unordered_map>
+#include <string>
 
 #include "../types.hpp"
 
@@ -79,6 +80,7 @@ class HTLayoutBase {
 
     // Render the overview
     virtual void render();
+    void render_workspace_label(WORKSPACEID workspace_id, PHLWORKSPACE workspace, const CBox& box);
 
     // Per-workspace framebuffers, keyed by workspace id. Populated by
     // render_to_fbs(), consumed by render().

@@ -16,6 +16,7 @@
 #include <hyprland/src/plugins/PluginSystem.hpp>
 #include <hyprland/src/render/Renderer.hpp>
 #include <hyprland/src/event/EventBus.hpp>
+#include <hyprland/src/config/lua/ConfigManager.hpp>
 #include <hyprland/src/config/values/ConfigValues.hpp>
 #include <hyprlang.hpp>
 #include <hyprutils/math/Box.hpp>
@@ -31,6 +32,276 @@
 
 using namespace Config::Actions;
 using namespace Config::Values;
+
+static constexpr auto LUA_MONITORS_CONFIG_KEY = "plugin.hyprtasking.monitors";
+
+class CLuaMonitorOverridesValue : public Config::Lua::ILuaConfigValue {
+  public:
+    using OverridesMap = std::unordered_map<std::string, HTConfig::SMonitorConfigOverride>;
+
+    Config::Lua::SParseError parse(lua_State* s) override {
+        struct SLuaStackGuard {
+            lua_State* state;
+            int top;
+
+            ~SLuaStackGuard() {
+                lua_settop(state, top);
+            }
+        } stack_guard {s, lua_gettop(s)};
+
+        if (!lua_istable(s, -1))
+            return {.errorCode = Config::Lua::PARSE_ERROR_BAD_TYPE, .message = "monitors expects a table"};
+
+        m_data.clear();
+
+        const int root = lua_absindex(s, -1);
+        const auto root_len = lua_rawlen(s, root);
+        for (lua_Integer i = 1; i <= static_cast<lua_Integer>(root_len); ++i) {
+            lua_geti(s, root, i);
+            if (!lua_istable(s, -1)) {
+                lua_pop(s, 1);
+                continue;
+            }
+
+            auto parsed = parse_monitor_entry(s, lua_absindex(s, -1), "");
+            if (!parsed.first.empty())
+                m_data[parsed.first] = std::move(parsed.second);
+
+            lua_pop(s, 1);
+        }
+
+        m_bSetByUser = true;
+        HTConfig::monitor_overrides = m_data;
+        return {};
+    }
+
+    const std::type_info* underlying() override {
+        return &typeid(OverridesMap);
+    }
+
+    void const* data() override {
+        return &m_data;
+    }
+
+    std::string toString() override {
+        return "monitors";
+    }
+
+    void push(lua_State* s) override {
+        lua_newtable(s);
+        int index = 1;
+        for (const auto& [selector, override] : m_data) {
+            lua_pushinteger(s, index++);
+            lua_newtable(s);
+
+            lua_pushstring(s, "output");
+            lua_pushstring(s, selector.c_str());
+            lua_settable(s, -3);
+
+            for (const auto& [key, value] : override.values) {
+                lua_pushstring(s, key.c_str());
+                std::visit([&](const auto& raw) {
+                    using ValueType = std::decay_t<decltype(raw)>;
+                    if constexpr (std::is_same_v<ValueType, std::string>)
+                        lua_pushstring(s, raw.c_str());
+                    else if constexpr (std::is_same_v<ValueType, Config::BOOL>)
+                        lua_pushboolean(s, raw);
+                    else if constexpr (std::is_same_v<ValueType, Config::INTEGER>)
+                        lua_pushinteger(s, raw);
+                    else
+                        lua_pushnumber(s, raw);
+                }, value);
+                lua_settable(s, -3);
+            }
+
+            lua_settable(s, -3);
+        }
+    }
+
+    void reset() override {
+        m_data.clear();
+        m_bSetByUser = false;
+        HTConfig::clear_monitor_overrides();
+    }
+
+    const auto& parsed() const {
+        return m_data;
+    }
+
+  public:
+    static std::string make_path(const std::string& prefix, const std::string& key) {
+        return prefix.empty() ? key : prefix + ":" + key;
+    }
+
+    static void maybe_store_scalar_value(
+        lua_State* s,
+        int value_index,
+        const std::string& path,
+        HTConfig::SMonitorConfigOverride& override
+    ) {
+        if (lua_isnil(s, value_index))
+            return;
+
+        if (lua_isboolean(s, value_index))
+            override.values[path] = (bool)lua_toboolean(s, value_index);
+        else if (lua_isinteger(s, value_index))
+            override.values[path] = (Config::INTEGER)lua_tointeger(s, value_index);
+        else if (lua_isnumber(s, value_index))
+            override.values[path] = (Config::FLOAT)lua_tonumber(s, value_index);
+        else if (lua_isstring(s, value_index))
+            override.values[path] = std::string {lua_tostring(s, value_index)};
+    }
+
+    static void maybe_store_scalar_field(
+        lua_State* s,
+        int table_index,
+        const char* field,
+        const std::string& path,
+        HTConfig::SMonitorConfigOverride& override
+    ) {
+        lua_getfield(s, table_index, field);
+        maybe_store_scalar_value(s, -1, path, override);
+        lua_pop(s, 1);
+    }
+
+    static void parse_named_subtable_fields(
+        lua_State* s,
+        int table_index,
+        const char* table_name,
+        const std::string& prefix,
+        std::initializer_list<const char*> fields,
+        HTConfig::SMonitorConfigOverride& override
+    ) {
+        lua_getfield(s, table_index, table_name);
+        if (!lua_istable(s, -1)) {
+            lua_pop(s, 1);
+            return;
+        }
+
+        const int subtable_index = lua_absindex(s, -1);
+        for (const char* field : fields)
+            maybe_store_scalar_field(s, subtable_index, field, make_path(prefix, field), override);
+
+        lua_pop(s, 1);
+    }
+
+    static std::pair<std::string, HTConfig::SMonitorConfigOverride> parse_monitor_entry(
+        lua_State* s,
+        int table_index,
+        const std::string& fallback_selector
+    ) {
+        HTConfig::SMonitorConfigOverride override;
+        std::string selector = fallback_selector;
+
+        lua_getfield(s, table_index, "output");
+        if (lua_isstring(s, -1))
+            selector = lua_tostring(s, -1);
+        lua_pop(s, 1);
+
+        maybe_store_scalar_field(s, table_index, "layout", "layout", override);
+        maybe_store_scalar_field(s, table_index, "gap_size", "gap_size", override);
+        maybe_store_scalar_field(s, table_index, "bg_color", "bg_color", override);
+        maybe_store_scalar_field(s, table_index, "border_size", "border_size", override);
+        maybe_store_scalar_field(s, table_index, "exit_on_hovered", "exit_on_hovered", override);
+        maybe_store_scalar_field(s, table_index, "warp_on_move_window", "warp_on_move_window", override);
+        maybe_store_scalar_field(
+            s,
+            table_index,
+            "close_overview_on_reload",
+            "close_overview_on_reload",
+            override
+        );
+        maybe_store_scalar_field(s, table_index, "full_render", "full_render", override);
+        maybe_store_scalar_field(s, table_index, "drag_button", "drag_button", override);
+        maybe_store_scalar_field(s, table_index, "select_button", "select_button", override);
+
+        parse_named_subtable_fields(
+            s,
+            table_index,
+            "labels",
+            "labels",
+            {
+                "display_label",
+                "position",
+                "font",
+                "font_size",
+                "text_opacity",
+                "text_color",
+                "background",
+                "background_color",
+                "background_opacity",
+            },
+            override
+        );
+        parse_named_subtable_fields(
+            s,
+            table_index,
+            "gestures",
+            "gestures",
+            {
+                "enabled",
+                "move_fingers",
+                "move_distance",
+                "open_fingers",
+                "open_distance",
+                "open_positive",
+            },
+            override
+        );
+        parse_named_subtable_fields(
+            s,
+            table_index,
+            "grid",
+            "grid",
+            {
+                "rows",
+                "cols",
+                "layers",
+                "loop_layers",
+                "loop",
+                "gaps_use_aspect_ratio",
+            },
+            override
+        );
+        parse_named_subtable_fields(
+            s,
+            table_index,
+            "linear",
+            "linear",
+            {
+                "top",
+                "height",
+                "scroll_speed",
+                "blur",
+            },
+            override
+        );
+
+        return {selector, override};
+    }
+
+    OverridesMap m_data;
+};
+
+static void reload_monitor_overrides_from_config() {
+    HTConfig::clear_monitor_overrides();
+
+    auto* lua_mgr = dynamic_cast<Config::Lua::CConfigManager*>(Config::mgr().get());
+    if (lua_mgr == nullptr)
+        return;
+
+    const auto it = lua_mgr->m_configValues.find(LUA_MONITORS_CONFIG_KEY);
+    if (it == lua_mgr->m_configValues.end())
+        return;
+
+    auto* monitors = dynamic_cast<class CLuaMonitorOverridesValue*>(it->second.get());
+    if (monitors == nullptr)
+        return;
+
+    for (const auto& [selector, override] : monitors->parsed()) {
+        HTConfig::set_monitor_override(selector, override);
+    }
+}
 
 APICALL EXPORT std::string PLUGIN_API_VERSION() {
     return HYPRLAND_API_VERSION;
@@ -133,8 +404,11 @@ static SDispatchResult change_layer(std::string arg, bool move_window) {
     if (cursor_view->layout->layout_name() != "grid")
         return {.success = false, .error = "layers are only supported in grid layout"};
 
-    const int LAYERS = HTConfig::value<Config::INTEGER>("grid:layers");
-    const int LOOP_LAYERS = HTConfig::value<Config::INTEGER>("grid:loop_layers");
+    const PHLMONITOR monitor = cursor_view->get_monitor();
+    if (monitor == nullptr)
+        return {.success = false, .error = "monitor is null"};
+    const int LAYERS = HTConfig::value_for_monitor<Config::INTEGER>(monitor, "grid:layers");
+    const int LOOP_LAYERS = HTConfig::value_for_monitor<Config::INTEGER>(monitor, "grid:loop_layers");
     const int original_layer = cursor_view->layout->layer;
 
     int resulting_layer = original_layer;
@@ -150,9 +424,6 @@ static SDispatchResult change_layer(std::string arg, bool move_window) {
         resulting_layer = ((resulting_layer % LAYERS) + LAYERS) % LAYERS;
     }
 
-    const PHLMONITOR monitor = cursor_view->get_monitor();
-    if (monitor == nullptr)
-        return {.success = false, .error = "monitor is null"};
     const PHLWORKSPACE active_workspace = monitor->m_activeWorkspace;
     if (active_workspace == nullptr)
         return {.success = false, .error = "active_workspace is null"};
@@ -318,8 +589,9 @@ static void on_mouse_button(IPointer::SButtonEvent e, Event::SCallbackInfo& info
 
     const bool pressed = e.state == WL_POINTER_BUTTON_STATE_PRESSED;
 
-    const unsigned int drag_button = HTConfig::value<Config::INTEGER>("drag_button");
-    const unsigned int select_button = HTConfig::value<Config::INTEGER>("select_button");
+    const PHLMONITOR monitor = cursor_view->get_monitor();
+    const unsigned int drag_button = HTConfig::value_for_monitor<Config::INTEGER>(monitor, "drag_button");
+    const unsigned int select_button = HTConfig::value_for_monitor<Config::INTEGER>(monitor, "select_button");
 
     if (pressed && e.button == drag_button) {
         info.cancelled = ht_manager->start_window_drag();
@@ -404,12 +676,15 @@ static void on_config_reloaded() {
     if (ht_manager == nullptr)
         return;
 
+    reload_monitor_overrides_from_config();
+
     // re-init scale and offset for inactive views, change layout if changed
     for (PHTVIEW& view : ht_manager->views) {
         if (view == nullptr)
             continue;
-        const Config::STRING new_layout = HTConfig::value<Config::STRING>("layout");
-        if (HTConfig::value<Config::INTEGER>("close_overview_on_reload")
+        const PHLMONITOR monitor = view->get_monitor();
+        const Config::STRING new_layout = HTConfig::value_for_monitor<Config::STRING>(monitor, "layout");
+        if (HTConfig::value_for_monitor<Config::INTEGER>(monitor, "close_overview_on_reload")
             || view->layout->layout_name() != new_layout) {
             Log::logger->log(LOG, "[Hyprtasking] Closing overview on config reload");
             view->hide(false);
@@ -538,7 +813,15 @@ static void add_dispatchers() {
     add_dispatcher(killhovered);
     add_dispatcher(setlayer);
     add_dispatcher(setlayerwindow);
-    HyprlandAPI::addLuaFunction(PHANDLE, "hyprtasking", "is_active", lua_is_active); \
+    HyprlandAPI::addLuaFunction(PHANDLE, "hyprtasking", "is_active", lua_is_active);
+}
+
+static void register_monitor_overrides_value() {
+    auto* lua_mgr = dynamic_cast<Config::Lua::CConfigManager*>(Config::mgr().get());
+    if (lua_mgr == nullptr)
+        return;
+
+    lua_mgr->m_configValues[LUA_MONITORS_CONFIG_KEY] = makeUnique<CLuaMonitorOverridesValue>();
 }
 
 #define addConfigValue(T, config, descr, value) do { \
@@ -550,6 +833,7 @@ static void add_dispatchers() {
 } while (0)
 
 static void init_config() {
+    HTConfig::clear_monitor_overrides();
     addConfigValue(CStringValue, "layout", "layout", "grid");
 
     // general
@@ -581,6 +865,20 @@ static void init_config() {
     addConfigValue(CIntValue, "grid:loop", "loop", 0);
     addConfigValue(CIntValue, "grid:gaps_use_aspect_ratio", "gaps use aspect ratio", 0);
 
+    // labels
+    addConfigValue(CBoolValue, "labels:display_label", "display workspace label", 1);
+    addConfigValue(CStringValue, "labels:position", "label position", "top_left");
+    addConfigValue(CStringValue, "labels:font", "label font", "");
+    addConfigValue(CIntValue, "labels:font_size", "label font size", 14);
+    addConfigValue(CIntValue, "labels:text_opacity", "label text opacity", 100);
+    addConfigValue(CStringValue, "labels:text_color", "label text color", "");
+    addConfigValue(CBoolValue, "labels:background", "label background", 0);
+    addConfigValue(CStringValue, "labels:background_color", "label background color", "");
+    addConfigValue(CIntValue, "labels:background_opacity", "label background opacity", 100);
+
+    addConfigValue(CStringValue, "monitors", "per-monitor label overrides", "");
+    register_monitor_overrides_value();
+
     //linear specific
     addConfigValue(CIntValue, "linear:blur", "blur", 1);
     addConfigValue(CFloatValue, "linear:height", "height", 300.f);
@@ -608,6 +906,7 @@ APICALL EXPORT PLUGIN_DESCRIPTION_INFO PLUGIN_INIT(HANDLE handle) {
     add_dispatchers();
     register_callbacks();
     init_functions();
+    reload_monitor_overrides_from_config();
     register_monitors();
 
     Log::logger->log(LOG, "[Hyprtasking] Plugin initialized");

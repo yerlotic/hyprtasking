@@ -22,7 +22,7 @@ HTView::HTView(MONITORID in_monitor_id) {
     closing = false;
     navigating = false;
 
-    std::string val = HTConfig::value<Config::STRING>("layout");
+    std::string val = HTConfig::value_for_monitor<Config::STRING>(get_monitor(), "layout");
     change_layout(val);
 }
 
@@ -58,7 +58,10 @@ void HTView::do_exit_behavior(bool exit_on_mouse) {
         return layout->get_ws_id_from_global(mouse_coords);
     };
 
-    const int EXIT_ON_HOVERED = HTConfig::value<Config::INTEGER>("exit_on_hovered");
+    const int EXIT_ON_HOVERED = HTConfig::value_for_monitor<Config::INTEGER>(
+        monitor,
+        "exit_on_hovered"
+    );
 
     const WORKSPACEID ws_id =
         (exit_on_mouse || EXIT_ON_HOVERED) ? try_get_hover_id() : monitor->m_activeWorkspace->m_id;
@@ -163,7 +166,7 @@ void HTView::move_id(WORKSPACEID ws_id, bool move_window) {
 
     if (move_window) {
         Desktop::focusState()->fullWindowFocus(hovered_window, Desktop::FOCUS_REASON_CLICK);
-        warp = *CConfigValue<Config::INTEGER>("plugin:hyprtasking:warp_on_move_window");
+        warp = HTConfig::value_for_monitor<Config::INTEGER>(monitor, "warp_on_move_window");
     } else {
         warp = *CConfigValue<Config::INTEGER>("cursor:warp_on_change_workspace");
     }
